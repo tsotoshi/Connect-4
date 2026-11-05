@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Four</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --board: #2453c9;
+    --board-edge: #1a3e9a;
+    --hole: #f4f1ea;
+    --p1: #e2463b;
+    --p2: #f2c230;
+    --win: #ffffff;
+    --btn: #1f2430;
+    --btn-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c;
+      --panel: #1b2029;
+      --text: #e8eaf0;
+      --muted: #9aa3b2;
+      --board: #2f5fe0;
+      --board-edge: #1f45b0;
+      --hole: #12151c;
+      --btn: #e8eaf0;
+      --btn-text: #12151c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c;
+    --panel: #1b2029;
+    --text: #e8eaf0;
+    --muted: #9aa3b2;
+    --board: #2f5fe0;
+    --board-edge: #1f45b0;
+    --hole: #12151c;
+    --btn: #e8eaf0;
+    --btn-text: #12151c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.8rem; letter-spacing: -0.02em; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin: 12px 0;
+  }
+  select, button {
+    font: inherit; font-size: 0.95rem;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+    background: var(--panel); color: var(--text);
+  }
+  button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .status {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.1rem; font-weight: 600; min-height: 2rem; margin: 4px 0 12px;
+  }
+  .chip {
+    width: 22px; height: 22px; border-radius: 50%; display: inline-block;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2);
+  }
+  .chip.p1 { background: var(--p1); }
+  .chip.p2 { background: var(--p2); }
+  .scores { display: flex; gap: 20px; color: var(--muted); font-size: 0.95rem; margin-bottom: 8px; }
+  .scores span { display: inline-flex; align-items: center; gap: 6px; }
+  .scores .chip { width: 14px; height: 14px; }
+
+  .board-wrap { width: min(560px, 100%); }
+  .board {
+    --gap: clamp(4px, 1.5vw, 10px);
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--gap);
+    padding: var(--gap);
+    background: var(--board);
+    border-radius: 16px;
+    box-shadow: 0 8px 0 var(--board-edge), 0 14px 30px rgba(0,0,0,0.25);
+    touch-action: manipulation;
+  }
+  .col { display: grid; grid-template-rows: repeat(6, 1fr); gap: var(--gap); cursor: pointer; border-radius: 10px; }
+  .board.locked .col { cursor: default; }
+  .col.hover { background: rgba(255,255,255,0.12); }
+  .cell {
+    aspect-ratio: 1; border-radius: 50%;
+    background: var(--hole);
+    box-shadow: inset 0 4px 6px rgba(0,0,0,0.25);
+    position: relative; overflow: hidden;
+  }
+  .disc {
+    position: absolute; inset: 0; border-radius: 50%;
+    box-shadow: inset 0 -5px 0 rgba(0,0,0,0.18), inset 0 3px 0 rgba(255,255,255,0.25);
+  }
+  .disc.p1 { background: var(--p1); }
+  .disc.p2 { background: var(--p2); }
+  .disc.drop { animation: drop var(--dur, 300ms) cubic-bezier(.45,0,.9,.5) both; }
+  @keyframes drop {
+    from { transform: translateY(var(--from, -600%)); }
+    to { transform: translateY(0); }
+  }
+  .disc.win::after {
+    content: ""; position: absolute; inset: 28%; border-radius: 50%;
+    border: 3px solid var(--win); animation: pulse 900ms ease-in-out infinite alternate;
+  }
+  @keyframes pulse { from { opacity: .4; transform: scale(.85); } to { opacity: 1; transform: scale(1.05); } }
+  .preview-row {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: clamp(4px, 1.5vw, 10px); padding: 0 clamp(4px, 1.5vw, 10px); margin-bottom: 6px;
+  }
+  .preview-row div { aspect-ratio: 1; border-radius: 50%; opacity: 0; transition: opacity .12s; }
+  .preview-row div.show { opacity: .85; }
+  .hint { color: var(--muted); font-size: 0.85rem; margin-top: 22px; text-align: center; }
+  @media (prefers-reduced-motion: reduce) {
+    .disc.drop, .disc.win::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <h1>Connect Four</h1>
+  <div class="controls">
+    <select id="mode" aria-label="Game mode">
+      <option value="ai">vs Computer</option>
+      <option value="pvp">2 Players</option>
+    </select>
+    <select id="difficulty" aria-label="Difficulty">
+      <option value="2">Easy</option>
+      <option value="5" selected>Medium</option>
+      <option value="8">Hard</option>
+    </select>
+    <button id="undo">Undo</button>
+    <button id="restart" class="primary">New game</button>
+  </div>
+  <div class="scores" id="scores"></div>
+  <div class="status" id="status"></div>
+  <div class="board-wrap">
+    <div class="preview-row" id="preview"></div>
+    <div class="board" id="board" role="grid" aria-label="Connect Four board"></div>
+  </div>
+  <p class="hint">Click a column or press keys 1–7 to drop a disc. Get four in a row to win.</p>
+
+<script>
+(() => {
+  const ROWS = 6, COLS = 7, EMPTY = 0, P1 = 1, P2 = 2;
+  const boardEl = document.getElementById('board');
+  const previewEl = document.getElementById('preview');
+  const statusEl = document.getElementById('status');
+  const scoresEl = document.getElementById('scores');
+  const modeEl = document.getElementById('mode');
+  const diffEl = document.getElementById('difficulty');
+  const undoBtn = document.getElementById('undo');
+  const restartBtn = document.getElementById('restart');
+
+  let grid, current, history, over, winLine, thinking, hoverCol = -1;
+  let starter = P1;
+  const scores = { [P1]: 0, [P2]: 0, draw: 0 };
+  const cells = []; // cells[r][c]
+  const cols = [];
+  const previews = [];
+
+  // ---------- build DOM ----------
+  for (let c = 0; c < COLS; c++) {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.dataset.col = c;
+    col.setAttribute('role', 'button');
+    col.setAttribute('aria-label', `Column ${c + 1}`);
+    for (let r = 0; r < ROWS; r++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      col.appendChild(cell);
+      (cells[r] ||= [])[c] = cell;
+    }
+    col.addEventListener('click', () => humanMove(c));
+    col.addEventListener('mouseenter', () => { hoverCol = c; renderHover(); });
+    col.addEventListener('mouseleave', () => { hoverCol = -1; renderHover(); });
+    boardEl.appendChild(col);
+    cols.push(col);
+    const p = document.createElement('div');
+    previewEl.appendChild(p);
+    previews.push(p);
+  }
+
+  // ---------- game logic ----------
+  const isAI = () => modeEl.value === 'ai';
+  const aiPlayer = P2;
+  const name = p => isAI() ? (p === P1 ? 'You' : 'Computer') : (p === P1 ? 'Red' : 'Yellow');
+
+  function lowestEmpty(g, c) {
+    for (let r = ROWS - 1; r >= 0; r--) if (g[r][c] === EMPTY) return r;
+    return -1;
+  }
+
+  function findWin(g, r, c) {
+    const p = g[r][c];
+    if (!p) return null;
+    for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+      const line = [[r, c]];
+      for (const s of [1, -1]) {
+        let rr = r + dr * s, cc = c + dc * s;
+        while (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && g[rr][cc] === p) {
+          line.push([rr, cc]); rr += dr * s; cc += dc * s;
+        }
+      }
+      if (line.length >= 4) return line;
+    }
+    return null;
+  }
+
+  function newGame() {
+    grid = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+    history = [];
+    over = false;
+    winLine = null;
+    thinking = false;
+    current = starter;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) cells[r][c].innerHTML = '';
+    render();
+    maybeAI();
+  }
+
+  function place(c, animate = true) {
+    const r = lowestEmpty(grid, c);
+    if (r < 0) return false;
+    grid[r][c] = current;
+    history.push({ r, c, p: current });
+    const disc = document.createElement('div');
+    disc.className = `disc p${current}`;
+    if (animate) {
+      disc.classList.add('drop');
+      disc.style.setProperty('--from', `${-(r + 1) * 115}%`);
+      disc.style.setProperty('--dur', `${180 + r * 45}ms`);
+    }
+    cells[r][c].appendChild(disc);
+
+    const line = findWin(grid, r, c);
+    if (line) {
+      over = true; winLine = line; scores[current]++;
+      line.forEach(([rr, cc]) => cells[rr][cc].firstChild?.classList.add('win'));
+      starter = starter === P1 ? P2 : P1;
+    } else if (history.length === ROWS * COLS) {
+      over = true; scores.draw++;
+      starter = starter === P1 ? P2 : P1;
+    } else {
+      current = current === P1 ? P2 : P1;
+    }
+    render();
+    return true;
+  }
+
+  function humanMove(c) {
+    if (over || thinking) return;
+    if (isAI() && current === aiPlayer) return;
+    if (place(c)) maybeAI();
+  }
+
+  function maybeAI() {
+    if (over || !isAI() || current !== aiPlayer) return;
+    thinking = true;
+    render();
+    setTimeout(() => {
+      const c = bestMove(grid, aiPlayer, +diffEl.value);
+      thinking = false;
+      if (!over) place(c);
+    }, 350);
+  }
+
+  function undo() {
+    if (thinking || !history.length) return;
+    const steps = isAI() ? (history[history.length - 1].p === aiPlayer && history.length > 1 ? 2 : 1) : 1;
+    if (over) {
+      // revert score
+      if (winLine) scores[history[history.length - 1].p]--; else scores.draw--;
+      starter = starter === P1 ? P2 : P1;
+      over = false; winLine = null;
+      cells.flat().forEach(cell => cell.firstChild?.classList.remove('win'));
+    }
+    for (let i = 0; i < steps && history.length; i++) {
+      const { r, c, p } = history.pop();
+      grid[r][c] = EMPTY;
+      cells[r][c].innerHTML = '';
+      current = p;
+    }
+    render();
+    maybeAI();
+  }
+
+  // ---------- AI: negamax with alpha-beta ----------
+  const ORDER = [3, 2, 4, 1, 5, 0, 6];
+
+  function scoreWindow(a, b, c, d, me) {
+    const opp = me === P1 ? P2 : P1;
+    let m = 0, o = 0, e = 0;
+    for (const v of [a, b, c, d]) v === me ? m++ : v === opp ? o++ : e++;
+    if (m === 3 && e === 1) return 5;
+    if (m === 2 && e === 2) return 2;
+    if (o === 3 && e === 1) return -4;
+    return 0;
+  }
+
+  function evaluate(g, me) {
+    let s = 0;
+    for (let r = 0; r < ROWS; r++) if (g[r][3] === me) s += 3;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (c + 3 < COLS) s += scoreWindow(g[r][c], g[r][c+1], g[r][c+2], g[r][c+3], me);
+      if (r + 3 < ROWS) s += scoreWindow(g[r][c], g[r+1][c], g[r+2][c], g[r+3][c], me);
+      if (r + 3 < ROWS && c + 3 < COLS) s += scoreWindow(g[r][c], g[r+1][c+1], g[r+2][c+2], g[r+3][c+3], me);
+      if (r + 3 < ROWS && c - 3 >= 0) s += scoreWindow(g[r][c], g[r+1][c-1], g[r+2][c-2], g[r+3][c-3], me);
+    }
+    return s;
+  }
+
+  function negamax(g, depth, alpha, beta, me, moves) {
+    const opp = me === P1 ? P2 : P1;
+    if (moves === ROWS * COLS) return 0;
+    if (depth === 0) return evaluate(g, me);
+    let best = -Infinity;
+    for (const c of ORDER) {
+      const r = lowestEmpty(g, c);
+      if (r < 0) continue;
+      g[r][c] = me;
+      let v;
+      if (findWin(g, r, c)) v = 100000 + depth; // prefer faster wins
+      else v = -negamax(g, depth - 1, -beta, -alpha, opp, moves + 1);
+      g[r][c] = EMPTY;
+      if (v > best) best = v;
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  function bestMove(g0, me, depth) {
+    const g = g0.map(row => row.slice());
+    const opp = me === P1 ? P2 : P1;
+    const moves = history.length;
+    let best = -Infinity, choices = [];
+    for (const c of ORDER) {
+      const r = lowestEmpty(g, c);
+      if (r < 0) continue;
+      g[r][c] = me;
+      const v = findWin(g, r, c) ? 1e9 : -negamax(g, depth - 1, -Infinity, Infinity, opp, moves + 1);
+      g[r][c] = EMPTY;
+      if (v > best) { best = v; choices = [c]; }
+      else if (v === best) choices.push(c);
+    }
+    // a bit of variety on easy
+    if (depth <= 2 && Math.random() < 0.25) {
+      const legal = ORDER.filter(c => lowestEmpty(g, c) >= 0);
+      return legal[Math.floor(Math.random() * legal.length)];
+    }
+    return choices[0];
+  }
+
+  // ---------- rendering ----------
+  function renderHover() {
+    const canPlay = !over && !thinking && !(isAI() && current === aiPlayer);
+    cols.forEach((col, c) => col.classList.toggle('hover', canPlay && c === hoverCol && lowestEmpty(grid, c) >= 0));
+    previews.forEach((p, c) => {
+      const show = canPlay && c === hoverCol && lowestEmpty(grid, c) >= 0;
+      p.className = show ? 'show' : '';
+      p.style.background = show ? `var(--p${current})` : 'transparent';
+    });
+  }
+
+  function render() {
+    const chip = p => `<span class="chip p${p}"></span>`;
+    if (over && winLine) {
+      const w = history[history.length - 1].p;
+      statusEl.innerHTML = `${chip(w)} ${isAI() && w === P1 ? 'You win!' : `${name(w)} wins!`}`;
+    } else if (over) {
+      statusEl.textContent = "It's a draw.";
+    } else if (thinking) {
+      statusEl.innerHTML = `${chip(current)} Computer is thinking…`;
+    } else {
+      statusEl.innerHTML = `${chip(current)} ${isAI() ? (current === P1 ? 'Your turn' : "Computer's turn") : `${name(current)}'s turn`}`;
+    }
+    scoresEl.innerHTML =
+      `<span>${chip(P1)} ${name(P1)}: ${scores[P1]}</span>` +
+      `<span>${chip(P2)} ${name(P2)}: ${scores[P2]}</span>` +
+      `<span>Draws: ${scores.draw}</span>`;
+    boardEl.classList.toggle('locked', over || thinking || (isAI() && current === aiPlayer));
+    undoBtn.disabled = thinking || !history.length;
+    diffEl.style.display = isAI() ? '' : 'none';
+    renderHover();
+  }
+
+  // ---------- events ----------
+  restartBtn.addEventListener('click', newGame);
+  undoBtn.addEventListener('click', undo);
+  modeEl.addEventListener('change', () => {
+    scores[P1] = scores[P2] = scores.draw = 0; starter = P1; newGame();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'SELECT') return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= COLS) humanMove(n - 1);
+    else if (e.key === 'u' || e.key === 'U') undo();
+    else if (e.key === 'n' || e.key === 'N') newGame();
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
