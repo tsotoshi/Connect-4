@@ -13,7 +13,7 @@
     --board: #2453c9;
     --board-edge: #1a3e9a;
     --hole: #f4f1ea;
-    --p1: #e2463b;
+    --p1: #9b3fe8;
     --p2: #f2c230;
     --win: #ffffff;
     --btn: #1f2430;
@@ -200,7 +200,7 @@
   // ---------- game logic ----------
   const isAI = () => modeEl.value === 'ai';
   const aiPlayer = P2;
-  const name = p => isAI() ? (p === P1 ? 'You' : 'Computer') : (p === P1 ? 'Red' : 'Yellow');
+  const name = p => isAI() ? (p === P1 ? 'You' : 'Computer') : (p === P1 ? 'Purple' : 'Yellow');
 
   function lowestEmpty(g, c) {
     for (let r = ROWS - 1; r >= 0; r--) if (g[r][c] === EMPTY) return r;
